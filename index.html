@@ -40,9 +40,9 @@ footer{text-align:center;padding:28px 16px;color:#94a3b8;font-size:14px}
 <div class="bar"><div></div></div>
 <div class="qrow"><button onclick="chg(-1)" aria-label="Decrease">−</button><input id="qty" value="1" readonly aria-label="Quantity"><button onclick="chg(1)" aria-label="Increase">+</button><button onclick="setMax()" style="width:auto;padding:0 18px;font-size:15px">MAX</button></div>
 <p id="total" style="font-weight:700">Total: 0.0005 BNB</p>
-<p><button class="btn" id="connectBtn" onclick="connectWallet()">CONNECT WALLET</button> <button class="btn btn2" disabled>MINT NFT — mint is CLOSED, opens after baseURI</button></p>
+<p><button class="btn" id="connectBtn" onclick="connectWallet()">CONNECT WALLET</button> <button class="btn btn2" id="mintBtn" onclick="mintNFT()">MINT NFT</button></p>
 <p id="walletStatus" class="muted">Wallet not connected. On a phone, open this site inside a wallet app browser (Binance / MetaMask / Trust Wallet).</p>
-<p id="txlog" class="muted">Mint status: CLOSED (mintPaused = true, deployed 07:50 WIB 2026-11-03) — minting opens only after baseURI is set, on a separate owner decision. No transaction can be created from this page while mint is closed.</p>
+<p id="txlog" class="muted">Mint status: LIVE (mintPaused = false, opened 08:01 WIB 2026-11-03) — minting is open.</p>
 <div class="card" style="text-align:left"><p><b>Mint with your agent — copy this prompt (use after mint opens):</b></p>
 <pre id="agentPrompt" style="white-space:pre-wrap;word-break:break-all;font-size:14px;line-height:1.6;color:#dbeafe">Mint 1 COSMIC UNIVERSE NFT on BNB Smart Chain (chain 56) via Binance Agentic Wallet.
 Contract: 0xf4Ab61174D9f8Cc0Cdfb5322DD7E12fC825fc956 (CosmicUniverse / COSMIC, ERC-721)
@@ -91,6 +91,21 @@ Max: 10 per transaction, Supply: 5,555</pre>
 function chg(d){let q=parseInt(document.getElementById('qty').value)+d; if(q<1)q=1; if(q>10)q=10; document.getElementById('qty').value=q; document.getElementById('total').textContent='Total: '+(q*0.0005).toFixed(4)+' BNB';}
 function setMax(){document.getElementById('qty').value=10; document.getElementById('total').textContent='Total: 0.0050 BNB';}
 function copyPrompt(){const t=document.getElementById('agentPrompt').textContent; navigator.clipboard.writeText(t).then(()=>{document.getElementById('copyResult').textContent='✅ Prompt copied.';}).catch(()=>{document.getElementById('copyResult').textContent='Copy failed — select the prompt text above manually.';});}
+async function mintNFT(){
+  const log=document.getElementById('txlog');
+  if(!window.ethereum){log.textContent='No browser wallet detected — open this site inside a wallet app browser, or use the agent prompt below.'; return;}
+  try{
+    const provider=new ethers.BrowserProvider(window.ethereum); await provider.send('eth_requestAccounts',[]);
+    const net=await provider.getNetwork();
+    if(net.chainId!==56n){try{await window.ethereum.request({method:'wallet_switchEthereumChain',params:[{chainId:'0x38'}]});}catch(e){await window.ethereum.request({method:'wallet_addEthereumChain',params:[{chainId:'0x38',chainName:'BNB Smart Chain',nativeCurrency:{name:'BNB',symbol:'BNB',decimals:18},rpcUrls:['https://bsc-dataseed.bnbchain.org'],blockExplorerUrls:['https://bscscan.com']}]});}}
+    const signer=await provider.getSigner(); const qty=parseInt(document.getElementById('qty').value)||1;
+    log.textContent='Waiting for wallet approval…';
+    const c=new ethers.Contract('0xf4Ab61174D9f8Cc0Cdfb5322DD7E12fC825fc956',['function mint(uint256 quantity) payable'],signer);
+    const tx=await c.mint(qty,{value:BigInt(qty)*500000000000000n});
+    log.textContent='Transaction sent: '+tx.hash+' — waiting for confirmation…'; await tx.wait();
+    log.innerHTML='✅ Minted '+qty+' COSMIC! <a href="https://bscscan.com/tx/'+tx.hash+'" target="_blank" rel="noopener">View on BscScan</a>';
+  }catch(e){log.textContent='Mint failed: '+(e.reason||e.message||e);}
+}
 function filterR(r,btn){document.querySelectorAll('#gal .gcard').forEach(c=>{c.style.display=(r==='all'||c.dataset.r===r)?'':'none';});}
 async function connectWallet(){
   const st=document.getElementById('walletStatus');
